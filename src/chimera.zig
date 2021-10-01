@@ -23,7 +23,7 @@ pub const CompileFlags = packed struct {
 
     _padding2: i25 align(4) = 0, // pad out to 32bits (same as c_uint)
 
-    ///
+    /// Cast this CompileFlags to a c_uint
     pub fn toC(self: CompileFlags) c_uint {
         return @bitCast(c_uint, self);
     }
@@ -165,12 +165,12 @@ pub const MatchEventHandlerRaw = fn(expression_id: c_uint,
     flags: c_uint, size: c_uint,
     captured: [*c]const Capture,
     ctx: ?*c_void
-    )callconv(.C) c_int;
+    ) callconv(.C) c_int;
 
 ///
 pub const ErrorEventHandlerRaw = fn(error_type: c_int,
     id: c_uint, info: ?*c_void, ctx: ?*c_void
-    )callconv(.C) c_int;
+    ) callconv(.C) c_int;
 
 /// fn(info: MatchInfo, ctx: <Context>) CallbackResult
 pub fn MatchEventHandler(comptime Context: type) type {
@@ -187,19 +187,29 @@ pub const Database = struct {
     ///
     handle: ?*c.ch_database_t,
 
-    ///
+    /// Compiles `expression` into a database.
+    /// If `platform` is null, the database is tuned for the current platform.
+    /// If compilation fails an error will be returned and
+    ///  `inf` will be initialized to a `CompileErrorInfo` assuming you didn't
+    ///  pass null for that parameter.
     pub fn compile(expression: [:0]const u8, flags: CompileFlags, mode: CompileMode,
                    platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
         var ret: Database = undefined;
         const st = c.ch_compile(expression.ptr,
             flags.toC(), @enumToInt(mode),
-            platform, &ret.handle, @ptrCast([*c][*c]c.ch_compile_error_t, inf)
+            platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf)
         );
         try translateError(st);
         return ret;
     }
 
-    ///
+    /// Compile `expressions` into a database, with a `CompileFlags` and id for
+    ///  each expression.  If compilation fails an error will be returned and
+    ///  `inf` will be initialized to a `CompileErrorInfo` assuming you didn't
+    ///  pass null for that parameter.
+    /// Expects `expression.len == flags.len == ids.len`
+    /// `ids` do not need to be unique, these values can be whatever you like
+    ///  and are what are provided in the match handler as `MatchInfo.id`.
     pub fn compileMulti(expressions: [][*:0]const u8, flags: []CompileFlags,
                    ids: []u32, mode: CompileMode,
                    platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
@@ -208,10 +218,11 @@ pub const Database = struct {
 
         var ret: Database = undefined;
         const st = c.ch_compile_multi(
-            @ptrCast([*c]const[*c]const u8, expressions.ptr),
-            @ptrCast([*c]const c_uint, flags.ptr),
+            @ptrCast([*]const[*]const u8, expressions.ptr),
+            @ptrCast([*]const c_uint, flags.ptr),
             ids.ptr, @intCast(c_uint, expressions.len),
-            @enumToInt(mode), platform, &ret.handle, @ptrCast([*c][*c]c.ch_compile_error_t, inf)
+            @enumToInt(mode), platform, &ret.handle,
+            @ptrCast(*?*c.ch_compile_error_t, inf)
         );
         try translateError(st);
         return ret;
@@ -227,12 +238,12 @@ pub const Database = struct {
 
         var ret: Database = undefined;
         const st = c.ch_compile_ext_multi(
-            @ptrCast([*c]const[*c]const u8, expressions.ptr),
-            @ptrCast([*c]const c_uint, flags.ptr),
+            @ptrCast([*]const[*]const u8, expressions.ptr),
+            @ptrCast([*]const c_uint, flags.ptr),
             ids.ptr, @intCast(c_uint, expressions.len),
             @enumToInt(mode),
             match_limit, match_limit_recursion,
-            platform, &ret.handle, @ptrCast([*c][*c]c.ch_compile_error_t, inf)
+            platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf)
         );
         try translateError(st);
         return ret;
@@ -406,6 +417,9 @@ fn WrapClosure(comptime Context: type) type {
     };
 }
 
+// In order to support using std.mem.Allocator with Chimera's set_allocator functions
+//  we need to store the provided allocator somewhere because we don't have any way
+//  to do a closure (no context parameter).
 var global_allocator: ?*std.mem.Allocator = null;
 
 fn globalAlloc(sz: usize) callconv(.C) ?*c_void {
