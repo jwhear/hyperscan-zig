@@ -14,7 +14,7 @@ pub const CompileFlags = packed struct {
     /// Only one match will be generated for the expression per stream.
     single_match: bool = false,
 
-    _padding1: bool = false,  // bit 5 is unused
+    _padding1: bool = false, // bit 5 is unused
 
     /// Treat this pattern as a sequence of UTF-8 characters.
     utf8: bool = false,
@@ -42,7 +42,7 @@ pub const PlatformInfo = c.hs_platform_info;
 
 ///
 pub const CompileErrorInfo = extern struct {
-     /// A human-readable error message describing the error.
+    /// A human-readable error message describing the error.
     message: [*:0]u8,
 
     /// The zero-based number of the expression that caused the error (if this
@@ -57,7 +57,7 @@ pub const CompileErrorInfo = extern struct {
 };
 
 ///
-pub const ChimeraError = error {
+pub const ChimeraError = error{
     /// The engine completed normally.
     //success = c.CH_SUCCESS
 
@@ -129,7 +129,6 @@ pub const ScanError = enum(c_int) {
 
     ///PCRE hits its recursion limit and reports PCRE_ERROR_RECURSIONLIMIT.
     recursion_limit = c.CH_ERROR_RECURSIONLIMIT,
-
 };
 
 ///
@@ -160,26 +159,19 @@ pub fn translateError(err: c.ch_error_t) !void {
 }
 
 ///
-pub const MatchEventHandlerRaw = fn(expression_id: c_uint,
-    from_byte: c_ulonglong, to_byte: c_ulonglong,
-    flags: c_uint, size: c_uint,
-    captured: [*c]const Capture,
-    ctx: ?*c_void
-    ) callconv(.C) c_int;
+pub const MatchEventHandlerRaw = fn (expression_id: c_uint, from_byte: c_ulonglong, to_byte: c_ulonglong, flags: c_uint, size: c_uint, captured: [*c]const Capture, ctx: ?*anyopaque) callconv(.C) c_int;
 
 ///
-pub const ErrorEventHandlerRaw = fn(error_type: c_int,
-    id: c_uint, info: ?*c_void, ctx: ?*c_void
-    ) callconv(.C) c_int;
+pub const ErrorEventHandlerRaw = fn (error_type: c_int, id: c_uint, info: ?*anyopaque, ctx: ?*anyopaque) callconv(.C) c_int;
 
 /// fn(info: MatchInfo, ctx: <Context>) CallbackResult
 pub fn MatchEventHandler(comptime Context: type) type {
-    return fn(MatchInfo, Context) CallbackResult;
+    return fn (MatchInfo, Context) CallbackResult;
 }
 
 /// fn(error_type: ScanError, id: usize, ctx: <Context>) CallbackResult
 pub fn ErrorEventHandler(comptime Context: type) type {
-    return fn(error_type: ScanError, id: usize, ctx: Context) CallbackResult;
+    return fn (error_type: ScanError, id: usize, ctx: Context) CallbackResult;
 }
 
 ///
@@ -192,13 +184,9 @@ pub const Database = struct {
     /// If compilation fails an error will be returned and
     ///  `inf` will be initialized to a `CompileErrorInfo` assuming you didn't
     ///  pass null for that parameter.
-    pub fn compile(expression: [:0]const u8, flags: CompileFlags, mode: CompileMode,
-                   platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
+    pub fn compile(expression: [:0]const u8, flags: CompileFlags, mode: CompileMode, platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
         var ret: Database = undefined;
-        const st = c.ch_compile(expression.ptr,
-            flags.toC(), @enumToInt(mode),
-            platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf)
-        );
+        const st = c.ch_compile(expression.ptr, flags.toC(), @enumToInt(mode), platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf));
         try translateError(st);
         return ret;
     }
@@ -210,41 +198,23 @@ pub const Database = struct {
     /// Expects `expression.len == flags.len == ids.len`
     /// `ids` do not need to be unique, these values can be whatever you like
     ///  and are what are provided in the match handler as `MatchInfo.id`.
-    pub fn compileMulti(expressions: [][*:0]const u8, flags: []CompileFlags,
-                   ids: []u32, mode: CompileMode,
-                   platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
+    pub fn compileMulti(expressions: [][*:0]const u8, flags: []CompileFlags, ids: []u32, mode: CompileMode, platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
         std.debug.assert(expressions.len == flags.len);
         std.debug.assert(expressions.len == ids.len);
 
         var ret: Database = undefined;
-        const st = c.ch_compile_multi(
-            @ptrCast([*]const[*]const u8, expressions.ptr),
-            @ptrCast([*]const c_uint, flags.ptr),
-            ids.ptr, @intCast(c_uint, expressions.len),
-            @enumToInt(mode), platform, &ret.handle,
-            @ptrCast(*?*c.ch_compile_error_t, inf)
-        );
+        const st = c.ch_compile_multi(@ptrCast([*]const [*]const u8, expressions.ptr), @ptrCast([*]const c_uint, flags.ptr), ids.ptr, @intCast(c_uint, expressions.len), @enumToInt(mode), platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf));
         try translateError(st);
         return ret;
     }
 
     ///
-    pub fn compileExtMulti(expressions: [][*:0]const u8, flags: []CompileFlags,
-                   ids: []u32, mode: CompileMode,
-                   match_limit: c_ulong, match_limit_recursion: c_ulong,
-                   platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
+    pub fn compileExtMulti(expressions: [][*:0]const u8, flags: []CompileFlags, ids: []u32, mode: CompileMode, match_limit: c_ulong, match_limit_recursion: c_ulong, platform: ?*PlatformInfo, inf: *?*CompileErrorInfo) !Database {
         std.debug.assert(expressions.len == flags.len);
         std.debug.assert(expressions.len == ids.len);
 
         var ret: Database = undefined;
-        const st = c.ch_compile_ext_multi(
-            @ptrCast([*]const[*]const u8, expressions.ptr),
-            @ptrCast([*]const c_uint, flags.ptr),
-            ids.ptr, @intCast(c_uint, expressions.len),
-            @enumToInt(mode),
-            match_limit, match_limit_recursion,
-            platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf)
-        );
+        const st = c.ch_compile_ext_multi(@ptrCast([*]const [*]const u8, expressions.ptr), @ptrCast([*]const c_uint, flags.ptr), ids.ptr, @intCast(c_uint, expressions.len), @enumToInt(mode), match_limit, match_limit_recursion, platform, &ret.handle, @ptrCast(*?*c.ch_compile_error_t, inf));
         try translateError(st);
         return ret;
     }
@@ -256,27 +226,16 @@ pub const Database = struct {
     }
 
     /// Note: the `flags` parameter is skipped unused and skipped intentionally
-    pub fn scanRaw(self: *const Database, data: []const u8,
-                scratch: *Scratch, on_event: MatchEventHandlerRaw,
-                on_error: ErrorEventHandlerRaw, context: anytype) !void {
-
+    pub fn scanRaw(self: *const Database, data: []const u8, scratch: *Scratch, on_event: MatchEventHandlerRaw, on_error: ErrorEventHandlerRaw, context: anytype) !void {
         if (data.len > std.math.maxInt(c_uint)) return error.data_too_large;
-        const err = c.ch_scan(
-            self.handle,
-            data.ptr, @intCast(c_uint, data.len),
-            0, // unused flags param
-            scratch.handle,
-            on_event, on_error,
-            context
-        );
+        const err = c.ch_scan(self.handle, data.ptr, @intCast(c_uint, data.len), 0, // unused flags param
+            scratch.handle, on_event, on_error, context);
 
         try translateError(err);
     }
 
     ///
-    pub fn scan(self: *const Database, data: []const u8, context: anytype,
-                scratch: *Scratch, on_event: MatchEventHandler(@TypeOf(context)),
-                on_error: ErrorEventHandler(@TypeOf(context))) !void {
+    pub fn scan(self: *const Database, data: []const u8, context: anytype, scratch: *Scratch, on_event: MatchEventHandler(@TypeOf(context)), on_error: ErrorEventHandler(@TypeOf(context))) !void {
         //TODO ensure that context is a pointer type
 
         if (data.len > std.math.maxInt(c_uint)) return error.data_too_large;
@@ -294,7 +253,7 @@ pub const Database = struct {
     /// Returns the size of this database
     pub fn size(self: *Database) !usize {
         var ret: usize = undefined;
-        try translateError( c.ch_database_size(self.handle, &ret) );
+        try translateError(c.ch_database_size(self.handle, &ret));
         return ret;
     }
 
@@ -302,10 +261,9 @@ pub const Database = struct {
     ///  the current allocator.
     pub fn info(self: *Database) ![]const u8 {
         var ret: [*c]u8 = undefined;
-        try translateError( c.ch_database_info(self.handle, &ret) );
+        try translateError(c.ch_database_info(self.handle, &ret));
         return std.mem.span(ret);
     }
-
 };
 
 ///
@@ -391,10 +349,7 @@ fn WrapClosure(comptime Context: type) type {
 
         const Self = @This();
 
-        pub fn onMatch(id: c_uint, from: c_ulonglong, to: c_ulonglong,
-                 flags: c_uint, size: c_uint, captured: [*c]const Capture,
-                 ctx: ?*c_void) callconv(.C) c_int {
-
+        pub fn onMatch(id: c_uint, from: c_ulonglong, to: c_ulonglong, flags: c_uint, size: c_uint, captured: [*c]const Capture, ctx: ?*anyopaque) callconv(.C) c_int {
             const mi = MatchInfo{
                 .id = @intCast(u32, id),
                 .from = @intCast(usize, from),
@@ -406,13 +361,10 @@ fn WrapClosure(comptime Context: type) type {
             return @enumToInt(closure.match_func(mi, closure.context));
         }
 
-        pub fn onError(error_type: c_int, id: c_uint, info: ?*c_void, ctx: ?*c_void ) callconv(.C) c_int {
+        pub fn onError(error_type: c_int, id: c_uint, info: ?*anyopaque, ctx: ?*anyopaque) callconv(.C) c_int {
             _ = info;
             var closure = @ptrCast(*Self, @alignCast(@alignOf(*Self), ctx));
-            return @enumToInt(closure.err_func(
-                            @intToEnum(ScanError, error_type),
-                            @intCast(usize, id),
-                            closure.context));
+            return @enumToInt(closure.err_func(@intToEnum(ScanError, error_type), @intCast(usize, id), closure.context));
         }
     };
 }
@@ -422,13 +374,13 @@ fn WrapClosure(comptime Context: type) type {
 //  to do a closure (no context parameter).
 var global_allocator: ?*std.mem.Allocator = null;
 
-fn globalAlloc(sz: usize) callconv(.C) ?*c_void {
+fn globalAlloc(sz: usize) callconv(.C) ?*anyopaque {
     if (global_allocator) |a| {
         return a.allocAdvanced(u8, @alignOf(usize), sz, false) catch return null;
     } else @panic("No global allocator has been set");
 }
 
-fn globalFree(mem: [*]c_void) callconv(.C) void {
+fn globalFree(mem: [*]anyopaque) callconv(.C) void {
     if (global_allocator) |a| {
         a.free(mem);
     } else @panic("No global allocator has been set");
@@ -440,28 +392,28 @@ fn globalFree(mem: [*]c_void) callconv(.C) void {
 const Allocators = struct {
 
     ///
-    pub const AllocFunc = fn(usize) callconv(.C) ?*c_void;
+    pub const AllocFunc = fn (usize) callconv(.C) ?*anyopaque;
     ///
-    pub const FreeFunc = fn(?*c_void) callconv(.C) void;
+    pub const FreeFunc = fn (?*anyopaque) callconv(.C) void;
 
     ///
     pub fn setAllocatorFuncs(alloc: AllocFunc, free: FreeFunc) !void {
-        try translateError( c.ch_set_allocator(alloc, free) );
+        try translateError(c.ch_set_allocator(alloc, free));
     }
 
     ///
     pub fn setDatabaseFuncs(alloc: AllocFunc, free: FreeFunc) !void {
-        try translateError( c.ch_set_database_allocator(alloc, free) );
+        try translateError(c.ch_set_database_allocator(alloc, free));
     }
 
     ///
     pub fn setMiscFuncs(alloc: AllocFunc, free: FreeFunc) !void {
-        try translateError( c.ch_set_misc_allocator(alloc, free) );
+        try translateError(c.ch_set_misc_allocator(alloc, free));
     }
 
     ///
     pub fn setScratchFuncs(alloc: AllocFunc, free: FreeFunc) !void {
-        try translateError( c.ch_set_scratch_allocator(alloc, free) );
+        try translateError(c.ch_set_scratch_allocator(alloc, free));
     }
 
     /// This sets all allocation/free functions globally using a Zig allocator
@@ -473,5 +425,5 @@ const Allocators = struct {
 
 /// Returns the release version of Chimera. Do not free the result.
 pub fn version() []const u8 {
-    return std.mem.span( c.ch_version() );
+    return std.mem.span(c.ch_version());
 }

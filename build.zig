@@ -44,7 +44,7 @@ pub fn getChimeraStatic(b: *Builder, rt: RuntimeType) !CLib {
     const chimera_dir = try buildHyperscan(b, true, rt);
 
     // Link libpcre into the lib dir
-    const pcre_lib = try std.fs.path.join(b.allocator, &[_][]const u8{chimera_dir, "lib", "libpcre.a"});
+    const pcre_lib = try std.fs.path.join(b.allocator, &[_][]const u8{chimera_dir, "lib64", "libpcre.a"});
     if (!exists(pcre_lib)) {
         _ = try b.exec(&[_][]const u8{
             "link",
@@ -54,7 +54,7 @@ pub fn getChimeraStatic(b: *Builder, rt: RuntimeType) !CLib {
     }
 
     return CLib{
-        .lib_path=try std.fs.path.join(b.allocator, &[_][]const u8{chimera_dir, "lib"}),
+        .lib_path=try std.fs.path.join(b.allocator, &[_][]const u8{chimera_dir, "lib64"}),
         .inc_path=try std.fs.path.join(b.allocator, &[_][]const u8{chimera_dir, "include"}),
     };
 }
@@ -114,6 +114,9 @@ fn buildHyperscan(b: *Builder, include_pcre: bool, rt: RuntimeType) ![]const u8 
         "-B", build_dir,
         "-S", hyperscan_source,
         "-G", generator,
+        // This flag deals with an error building PCRE
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+
         if (rt == .skinny) "-DFAT_RUNTIME=off" else "-DFAT_RUNTIME=on",
         "-DCMAKE_C_COMPILER=zig-cc",
         "-DCMAKE_CXX_COMPILER=zig-c++",
